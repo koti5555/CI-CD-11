@@ -38,9 +38,9 @@ FAIL:
 Push to `main` or manually run **Practical 11 - Logging, Test and Publish**. GitHub Actions trains the same deterministic classroom model, applies the 0.85 quality gate, runs ML/API tests, builds and tests the container, then publishes the tested image to GHCR.
 
 Image reference retained from Practical 9:
-`ghcr.io/koti5555/student-result-prediction-ci-cd-9:latest`
+`ghcr.io/koti5555/student-result-prediction-ci-cd-11:latest`
 
-If GHCR rejects the push with `permission_denied: write_package`, open the existing GHCR package settings and grant repository `koti5555/CI-CD-11` **Write** access under **Manage Actions access**. Never add a PAT or token to source files.
+This repository publishes to its own GHCR package, `student-result-prediction-ci-cd-11`, to avoid needing write permission to the Practical-9 package. Never add a PAT or token to source files.
 
 ## Render redeployment
 
