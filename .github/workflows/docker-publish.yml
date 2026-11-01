@@ -11,7 +11,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: student-result-prediction-ci-cd-9
+  IMAGE_NAME: student-result-prediction-ci-cd-11
 
 jobs:
   build-test-publish:
