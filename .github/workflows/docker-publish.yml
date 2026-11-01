@@ -5,6 +5,10 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
+concurrency:
+  group: practical-11-image-publish
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write
