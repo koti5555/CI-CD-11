@@ -1,0 +1,98 @@
+name: Practical 11 - Logging, Test and Publish
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: student-result-prediction-ci-cd-9
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Train existing sample model
+        run: python train_model.py
+
+      - name: Check ML quality gate
+        run: python quality_gate.py
+
+      - name: Run automated tests
+        run: python -m unittest discover -v
+
+      - name: Build Docker image
+        run: docker build -t student-result-p11:ci .
+
+      - name: Start test container
+        run: |
+          docker run -d --name student-result-p11 -p 5000:5000 student-result-p11:ci
+
+      - name: Test health endpoint
+        run: |
+          for attempt in {1..20}; do
+            if curl --fail --silent http://localhost:5000/health; then exit 0; fi
+            sleep 3
+          done
+          docker logs student-result-p11
+          exit 1
+
+      - name: Test valid PASS prediction
+        run: |
+          response=$(curl --fail --silent --show-error -X POST http://localhost:5000/predict -H "Content-Type: application/json" --data '{"attendance":90,"internal_marks":85,"assignment_marks":88,"previous_score":80}')
+          echo "$response"
+          echo "$response" | grep -q '"prediction":"PASS"'
+
+      - name: Test validation warning
+        run: |
+          code=$(curl -s -o /tmp/invalid.json -w "%{http_code}" -X POST http://localhost:5000/predict -H "Content-Type: application/json" --data '{"attendance":"bad"}')
+          test "$code" = "400"
+          docker logs student-result-p11 2>&1 | grep -q 'event=validation_error'
+
+      - name: Test missing route warning
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/not-a-real-route)
+          test "$code" = "404"
+          docker logs student-result-p11 2>&1 | grep -q 'status=404'
+
+      - name: Show application logs
+        if: always()
+        run: docker logs student-result-p11 || true
+
+      - name: Remove test container
+        if: always()
+        run: docker rm -f student-result-p11 || true
+
+      - name: Prepare GHCR image name
+        run: |
+          IMAGE_ID="ghcr.io/${{ github.repository_owner }}/${IMAGE_NAME}"
+          echo "IMAGE_ID=$(echo "$IMAGE_ID" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Tag and publish tested image
+        run: |
+          docker tag student-result-p11:ci "$IMAGE_ID:latest"
+          docker tag student-result-p11:ci "$IMAGE_ID:sha-${GITHUB_SHA}"
+          docker push "$IMAGE_ID:latest"
+          docker push "$IMAGE_ID:sha-${GITHUB_SHA}"
